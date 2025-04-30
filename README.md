@@ -1,32 +1,43 @@
 # DropServe
 
-A browser-based static site server that lets you preview your projects instantly with just a drag and drop.
+A lightweight browser-based tool for instantly previewing static websites with just a drag and drop.
 
-![DropServe Logo](https://placehold.co/600x400?text=DropServe)
+![DropServe Screenshot](https://placehold.co/600x400?text=DropServe)
 
 ## What is DropServe?
 
-DropServe is a lightweight, browser-based tool that eliminates the tedious workflow of opening your code editor and running a server just to preview static websites. Simply drag your project folder onto the DropServe interface, and it instantly serves your files locally for preview.
+DropServe is a zero-setup local development server for static websites. It eliminates the tedious workflow of opening a code editor and running a server command just to preview your static site. Simply drag your project folder onto the DropServe interface, and it instantly serves and displays your site.
 
 ## Features
 
 - 🖱️ **Drag & Drop Interface** - Just drag your folder onto the browser window
-- 🗂️ **Built-in File Explorer** - Browse your project structure with ease
-- 👁️ **Instant Preview** - See your HTML, images, and SVGs rendered in real-time
-- 🔍 **Code View with Syntax Highlighting** - Examine source code with proper highlighting
+- 👁️ **Instant Preview** - See your site rendered immediately with all assets
+- 📱 **Works with Modern Frameworks** - Compatible with Vite, Webpack, and other bundlers
+- 🔄 **Asset Path Resolution** - Properly handles absolute paths (e.g., `/assets/main.js`)
 - 🏃‍♂️ **Zero Setup** - No installation, no command line, no dependencies
-- 🔒 **Fully Local** - Your files never leave your computer
+- 🔒 **Fully Local** - Everything runs in your browser, files never leave your computer
 
-## Getting Started
+## How to Use
 
-1. Download the `dropserve.html` file
-2. Open it in a modern browser (Chrome, Edge, or other Chromium-based browsers)
+1. Download the `index.html` and `dropserve.js` files to the same folder
+2. Open `index.html` in a modern browser (Chrome, Edge, or other Chromium-based browsers)
 3. Drag your static site folder onto the drop area (or click to select a folder)
-4. Start browsing and previewing your site instantly
+4. View your site instantly in the preview
+
+## How It Works
+
+DropServe uses a combination of modern browser APIs to create a virtual server right in your browser:
+
+1. **File System Access API** - To read files from your local folder
+2. **Message Passing** - To communicate between the parent window and iframe
+3. **Network Interception** - To serve local files in response to requests from your site
+4. **Blob URLs** - To represent your files in a way the browser can access
+
+This approach means your site runs just like it would on a real server, maintaining all the behaviors and interactions that make your site work.
 
 ## Browser Compatibility
 
-DropServe uses the File System Access API, which is currently supported in:
+DropServe requires the File System Access API, which is currently supported in:
 
 - Google Chrome (version 86+)
 - Microsoft Edge (version 86+)
@@ -34,22 +45,22 @@ DropServe uses the File System Access API, which is currently supported in:
 
 ## Use Cases
 
-- Quick previews of static websites during development
-- Teaching web development without complicated tooling setup
-- Previewing HTML email templates
-- Inspecting static site generator output
-- Checking exported design prototypes
+- Quick previews during development
+- Teaching web development without complicated tooling
+- Checking outputs from static site generators
+- Previewing sites built with modern frameworks (React, Vue, etc.)
+- Testing downloaded templates or themes
 
 ## Limitations
 
 - Works only in browsers that support the File System Access API
-- Complex sites with many interdependent files might have some import resolution issues
-- ES modules with bare imports won't be automatically resolved
+- Does not support server-side functionality (APIs, databases, etc.)
+- Cannot access resources from different domains unless they allow CORS
 
 ## License
 
 MIT
 
-## Author
+---
 
 Created with ❤️ to simplify the web development workflow

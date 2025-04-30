@@ -1,648 +1,249 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DropServe</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      height: 100vh;
-      background-color: #f5f7ff;
-      color: #333;
-    }
-    
-    .welcome {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      height: 100vh;
-    }
-    
-    .drop-area {
-      width: 500px;
-      max-width: 90vw;
-      padding: 40px;
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-      text-align: center;
-      border: 2px dashed #e0e4ff;
-      transition: all 0.2s ease;
-    }
-    
-    .drop-area.active {
-      border-color: #6366F1;
-      background-color: #f5f7ff;
-    }
-    
-    .logo {
-      display: block;
-      width: 80px;
-      height: 80px;
-      margin: 0 auto 20px;
-      color: #6366F1;
-    }
-    
-    h1 {
-      font-size: 36px;
-      font-weight: 700;
-      color: #6366F1;
-      margin-bottom: 16px;
-    }
-    
-    .subtitle {
-      color: #6b7280;
-      margin-bottom: 32px;
-      font-size: 18px;
-    }
-    
-    .btn {
-      background-color: #6366F1;
-      color: white;
-      padding: 12px 24px;
-      border-radius: 8px;
-      border: none;
-      font-size: 16px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-    
-    .btn:hover {
-      background-color: #4F46E5;
-    }
-    
-    .preview {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: none;
-    }
-    
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-    
-    .toolbar {
-      position: fixed;
-      top: 16px;
-      right: 16px;
-      z-index: 1000;
-      display: flex;
-      gap: 8px;
-    }
-    
-    .tool-btn {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background-color: #6366F1;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 18px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      transition: all 0.2s;
-    }
-    
-    .tool-btn:hover {
-      transform: scale(1.05);
-      background-color: #4F46E5;
-    }
-    
-    .loading {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(255,255,255,0.9);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-      display: none;
-    }
-    
-    .spinner {
-      width: 48px;
-      height: 48px;
-      border: 4px solid rgba(99, 102, 241, 0.2);
-      border-radius: 50%;
-      border-left-color: #6366F1;
-      animation: spin 1s linear infinite;
-      margin-bottom: 24px;
-    }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 12px 24px;
-      border-radius: 8px;
-      color: white;
-      font-weight: 500;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      z-index: 3000;
-      opacity: 0;
-      transition: opacity 0.3s;
-      pointer-events: none;
-    }
-    
-    .toast.success {
-      background-color: #10B981;
-    }
-    
-    .toast.error {
-      background-color: #EF4444;
-    }
-    
-    .toast.info {
-      background-color: #3B82F6;
-    }
-    
-    .toast.visible {
-      opacity: 1;
-    }
-  </style>
-</head>
-<body>
-  <div id="app">
-    <div id="welcome" class="welcome">
-      <div id="dropArea" class="drop-area">
-        <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M9 3H5C3.89543 3 3 3.89543 3 5V9C3 10.1046 3.89543 11 5 11H9C10.1046 11 11 10.1046 11 9V5C11 3.89543 10.1046 3 9 3Z" />
-          <path d="M19 3H15C13.8954 3 13 3.89543 13 5V9C13 10.1046 13.8954 11 15 11H19C20.1046 11 21 10.1046 21 9V5C21 3.89543 20.1046 3 19 3Z" />
-          <path d="M5 13H9C10.1046 13 11 13.8954 11 15V19C11 20.1046 10.1046 21 9 21H5C3.89543 21 3 20.1046 3 19V15C3 13.8954 3.89543 13 5 13Z" />
-          <path d="M17 16L21 16" />
-          <path d="M17 16L19 14" />
-          <path d="M17 16L19 18" />
-          <path d="M13 16L17 16" />
-        </svg>
-        <h1>DropServe</h1>
-        <p class="subtitle">Drag your static site folder here to instantly preview it</p>
-        <button id="selectBtn" class="btn">Choose Folder</button>
-      </div>
-    </div>
-    
-    <div id="preview" class="preview">
-      <iframe id="previewFrame"></iframe>
-      
-      <div class="toolbar">
-        <div id="backBtn" class="tool-btn" title="Back to welcome screen">↩</div>
-        <div id="refreshBtn" class="tool-btn" title="Refresh preview">⟳</div>
-      </div>
-    </div>
-    
-    <div id="loading" class="loading">
-      <div class="spinner"></div>
-      <div id="loadingMessage">Loading...</div>
-    </div>
-    
-    <div id="toast" class="toast"></div>
-  </div>
-  
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // DOM Elements
-      const welcomeScreen = document.getElementById('welcome');
-      const previewScreen = document.getElementById('preview');
-      const loadingScreen = document.getElementById('loading');
-      const dropArea = document.getElementById('dropArea');
-      const selectBtn = document.getElementById('selectBtn');
-      const backBtn = document.getElementById('backBtn');
-      const refreshBtn = document.getElementById('refreshBtn');
-      const previewFrame = document.getElementById('previewFrame');
-      const loadingMessage = document.getElementById('loadingMessage');
-      const toast = document.getElementById('toast');
-      
-      // State variables
-      let rootDirHandle = null;
-      let indexFileHandle = null;
-      
-      // Event Listeners
-      selectBtn.addEventListener('click', selectFolder);
-      backBtn.addEventListener('click', resetApp);
-      refreshBtn.addEventListener('click', refreshPreview);
-      
-      // Drag and drop handlers
-      dropArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropArea.classList.add('active');
-      });
-      
-      dropArea.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dropArea.classList.remove('active');
-      });
-      
-      dropArea.addEventListener('drop', handleDrop);
-      
-      // Check if File System Access API is supported
-      if (!('showDirectoryPicker' in window)) {
-        showToast("Your browser doesn't support the File System Access API. Please use Chrome, Edge, or another Chromium-based browser.", 'error');
-      }
-      
-      // Functions
-      async function selectFolder() {
-        try {
-          const dirHandle = await window.showDirectoryPicker();
-          await processFolder(dirHandle);
-        } catch (error) {
-          if (error.name !== 'AbortError') {
-            showToast(`Error selecting folder: ${error.message}`, 'error');
-            console.error(error);
-          }
-        }
-      }
-      
-      async function handleDrop(e) {
-        e.preventDefault();
-        dropArea.classList.remove('active');
-        
-        const items = e.dataTransfer.items;
-        if (!items || items.length === 0) {
-          showToast('No items were dropped', 'error');
-          return;
-        }
-        
-        const item = items[0];
-        
-        if (item.kind === 'file' && typeof item.webkitGetAsEntry === 'function') {
-          const entry = item.webkitGetAsEntry();
-          
-          if (entry && entry.isDirectory) {
-            try {
-              // When dropping, we need to ask the user again for permission
-              const dirHandle = await window.showDirectoryPicker();
-              await processFolder(dirHandle);
-            } catch (error) {
-              showToast(`Error processing dropped folder: ${error.message}`, 'error');
-              console.error(error);
-            }
-          } else {
-            showToast('Please drop a folder, not a file', 'error');
-          }
-        } else {
-          showToast('Unsupported drop item', 'error');
-        }
-      }
-      
-      async function processFolder(dirHandle) {
-        showLoading('Analyzing folder...');
-        rootDirHandle = dirHandle;
-        
-        try {
-          // Find index.html
-          let indexFile = await findIndexFile(dirHandle);
-          
-          if (indexFile) {
-            indexFileHandle = indexFile;
-            await processIndexFile(indexFile);
-            
-            // Switch to preview
-            welcomeScreen.style.display = 'none';
-            previewScreen.style.display = 'block';
-            
-            showToast(`Site "${dirHandle.name}" loaded successfully!`, 'success');
-          } else {
-            throw new Error(`No index.html found in "${dirHandle.name}" folder`);
-          }
-        } catch (error) {
-          showToast(error.message, 'error');
-          console.error(error);
-        } finally {
-          hideLoading();
-        }
-      }
-      
-      async function findIndexFile(dirHandle) {
-        const indexFiles = ['index.html', 'index.htm', 'default.html', 'default.htm'];
-        
-        for (const fileName of indexFiles) {
-          try {
-            return await dirHandle.getFileHandle(fileName);
-          } catch (error) {
-            // File not found, continue to next
-          }
-        }
-        
-        return null;
-      }
-      
-      async function processIndexFile(fileHandle) {
-        showLoading('Processing index.html...');
-        
-        try {
-          const file = await fileHandle.getFile();
-          const content = await file.text();
-          
-          // Create a server script to intercept resource requests
-          const serverScript = `
-            <script>
-              // Virtual server for handling asset requests
-              (function() {
-                // Map to track pending asset requests
-                const pendingRequests = new Map();
-                let requestId = 0;
-                
-                // Listen for message from parent frame
-                window.addEventListener('message', function(event) {
-                  const message = event.data;
-                  
-                  if (message.type === 'assetResponse') {
-                    const callback = pendingRequests.get(message.id);
-                    if (callback) {
-                      callback(message.content, message.contentType);
-                      pendingRequests.delete(message.id);
-                    }
-                  }
-                });
-                
-                // Override fetch
-                const originalFetch = window.fetch;
-                window.fetch = function(url, options) {
-                  // Only intercept same-origin requests
-                  if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//') && 
-                      !url.startsWith('data:') && !url.startsWith('blob:')) {
-                    return new Promise((resolve, reject) => {
-                      const id = requestId++;
-                      
-                      // Store callback
-                      pendingRequests.set(id, (content, contentType) => {
-                        if (content === null) {
-                          reject(new Error('Asset not found: ' + url));
-                          return;
-                        }
-                        
-                        // Convert base64 to blob
-                        const binaryString = atob(content);
-                        const bytes = new Uint8Array(binaryString.length);
-                        for (let i = 0; i < binaryString.length; i++) {
-                          bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        
-                        const blob = new Blob([bytes], { type: contentType });
-                        const response = new Response(blob, {
-                          status: 200,
-                          statusText: 'OK',
-                          headers: { 'Content-Type': contentType }
-                        });
-                        
-                        resolve(response);
-                      });
-                      
-                      // Request asset from parent frame
-                      window.parent.postMessage({
-                        type: 'assetRequest',
-                        id: id,
-                        path: url
-                      }, '*');
-                    });
-                  }
-                  
-                  // Pass through other requests
-                  return originalFetch(url, options);
-                };
-                
-                // Override XMLHttpRequest
-                const XHROpen = XMLHttpRequest.prototype.open;
-                XMLHttpRequest.prototype.open = function(method, url, ...args) {
-                  // Only intercept same-origin requests
-                  if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//') && 
-                      !url.startsWith('data:') && !url.startsWith('blob:')) {
-                    const xhr = this;
-                    const id = requestId++;
-                    
-                    // Store original onload and onerror
-                    const originalOnload = xhr.onload;
-                    const originalOnerror = xhr.onerror;
-                    
-                    // Override onload and onerror
-                    xhr._url = url;
-                    xhr._pendingId = id;
-                    
-                    // Store callback
-                    pendingRequests.set(id, (content, contentType) => {
-                      if (content === null) {
-                        const error = new Error('Asset not found: ' + url);
-                        xhr.status = 404;
-                        xhr.statusText = 'Not Found';
-                        xhr.responseType = 'text';
-                        xhr.response = xhr.responseText = error.message;
-                        if (xhr.onerror) xhr.onerror();
-                        return;
-                      }
-                      
-                      // Convert base64 to blob
-                      const binaryString = atob(content);
-                      const bytes = new Uint8Array(binaryString.length);
-                      for (let i = 0; i < binaryString.length; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
-                      }
-                      
-                      const blob = new Blob([bytes], { type: contentType });
-                      const blobUrl = URL.createObjectURL(blob);
-                      
-                      // Call the original XHR with the blob URL
-                      XHROpen.call(xhr, method, blobUrl, ...args);
-                      xhr.send();
-                    });
-                    
-                    // Request asset from parent frame
-                    window.parent.postMessage({
-                      type: 'assetRequest',
-                      id: id,
-                      path: url
-                    }, '*');
-                    
-                    // Prevent actual XHR for now
-                    return XHROpen.call(this, 'GET', 'about:blank', ...args);
-                  }
-                  
-                  // Pass through other requests
-                  return XHROpen.call(this, method, url, ...args);
-                };
-              })();
-            </script>
-          `;
-          
-          // Insert server script at beginning of body
-          let modifiedHtml;
-          if (content.includes('<body>')) {
-            modifiedHtml = content.replace('<body>', '<body>' + serverScript);
-          } else if (content.includes('<body ')) {
-            modifiedHtml = content.replace(/<body ([^>]*)>/, '<body $1>' + serverScript);
-          } else {
-            modifiedHtml = content + serverScript;
-          }
-          
-          // Create blob URL
-          const blob = new Blob([modifiedHtml], { type: 'text/html' });
-          const url = URL.createObjectURL(blob);
-          
-          // Load in iframe
-          previewFrame.src = url;
-        } catch (error) {
-          throw new Error(`Error processing index file: ${error.message}`);
-        }
-      }
-      
-      async function getAssetContent(path) {
-        // Remove query string and hash
-        const cleanPath = path.split('?')[0].split('#')[0];
-        
-        // Handle absolute paths
-        const normalizedPath = cleanPath.startsWith('/') ? cleanPath.substring(1) : cleanPath;
-        
-        if (!normalizedPath) {
-          return { content: null, contentType: null };
-        }
-        
-        try {
-          const pathParts = normalizedPath.split('/');
-          const fileName = pathParts.pop();
-          let currentDir = rootDirHandle;
-          
-          // Navigate through directories
-          for (const part of pathParts) {
-            if (!part || part === '.') continue;
-            if (part === '..') throw new Error('Cannot navigate above root directory');
-            
-            try {
-              currentDir = await currentDir.getDirectoryHandle(part);
-            } catch (error) {
-              return { content: null, contentType: null };
-            }
-          }
-          
-          // Get file
-          let fileHandle;
-          try {
-            fileHandle = await currentDir.getFileHandle(fileName);
-          } catch (error) {
-            return { content: null, contentType: null };
-          }
-          
-          // Read file and convert to base64
-          const file = await fileHandle.getFile();
-          const contentType = getContentType(fileName);
-          const arrayBuffer = await file.arrayBuffer();
-          const bytes = new Uint8Array(arrayBuffer);
-          let binary = '';
-          for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          const base64 = btoa(binary);
-          
-          return { content: base64, contentType };
-        } catch (error) {
-          console.error(`Error loading asset: ${path}`, error);
-          return { content: null, contentType: null };
-        }
-      }
-      
-      function getContentType(fileName) {
-        const extension = fileName.split('.').pop().toLowerCase();
-        
-        const contentTypes = {
-          'html': 'text/html',
-          'htm': 'text/html',
-          'css': 'text/css',
-          'js': 'application/javascript',
-          'mjs': 'application/javascript',
-          'json': 'application/json',
-          'svg': 'image/svg+xml',
-          'png': 'image/png',
-          'jpg': 'image/jpeg',
-          'jpeg': 'image/jpeg',
-          'gif': 'image/gif',
-          'webp': 'image/webp',
-          'ico': 'image/x-icon',
-          'woff': 'font/woff',
-          'woff2': 'font/woff2',
-          'ttf': 'font/ttf',
-          'otf': 'font/otf',
-          'eot': 'application/vnd.ms-fontobject',
-        };
-        
-        return contentTypes[extension] || 'application/octet-stream';
-      }
-      
-      function refreshPreview() {
-        if (indexFileHandle) {
-          processIndexFile(indexFileHandle);
-          showToast('Preview refreshed', 'info');
-        }
-      }
-      
-      function resetApp() {
-        // Clear iframe
-        previewFrame.src = 'about:blank';
-        
-        // Switch back to welcome screen
-        previewScreen.style.display = 'none';
-        welcomeScreen.style.display = 'flex';
-      }
-      
-      function showLoading(message) {
-        loadingMessage.textContent = message || 'Loading...';
-        loadingScreen.style.display = 'flex';
-      }
-      
-      function hideLoading() {
-        loadingScreen.style.display = 'none';
-      }
-      
-      function showToast(message, type) {
-        toast.textContent = message;
-        toast.className = `toast ${type || 'info'}`;
-        toast.classList.add('visible');
-        
-        setTimeout(() => {
-          toast.classList.remove('visible');
-        }, 4000);
-      }
-      
-      // Listen for asset requests from iframe
-      window.addEventListener('message', async function(event) {
-        const message = event.data;
-        
-        if (message && message.type === 'assetRequest') {
-          const { id, path } = message;
-          const { content, contentType } = await getAssetContent(path);
-          
-          // Send response back to iframe
-          previewFrame.contentWindow.postMessage({
-            type: 'assetResponse',
-            id: id,
-            content: content,
-            contentType: contentType
-          }, '*');
-        }
-      });
-    });
-  </script>
-</body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>DropServe</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				font-family:
+					system-ui,
+					-apple-system,
+					BlinkMacSystemFont,
+					'Segoe UI',
+					Roboto,
+					sans-serif;
+				height: 100vh;
+				background-color: #f5f7ff;
+				color: #333;
+			}
+
+			.welcome {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				flex-direction: column;
+				height: 100vh;
+			}
+
+			.drop-area {
+				width: 500px;
+				max-width: 90vw;
+				padding: 40px;
+				background: #fff;
+				border-radius: 16px;
+				box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+				text-align: center;
+				border: 2px dashed #e0e4ff;
+				transition: all 0.2s ease;
+			}
+
+			.drop-area.active {
+				border-color: #6366f1;
+				background-color: #f5f7ff;
+			}
+
+			.logo {
+				display: block;
+				width: 80px;
+				height: 80px;
+				margin: 0 auto 20px;
+				color: #6366f1;
+			}
+
+			h1 {
+				font-size: 36px;
+				font-weight: 700;
+				color: #6366f1;
+				margin-bottom: 16px;
+			}
+
+			.subtitle {
+				color: #6b7280;
+				margin-bottom: 32px;
+				font-size: 18px;
+			}
+
+			.btn {
+				background-color: #6366f1;
+				color: white;
+				padding: 12px 24px;
+				border-radius: 8px;
+				border: none;
+				font-size: 16px;
+				font-weight: 500;
+				cursor: pointer;
+				transition: background-color 0.2s;
+			}
+
+			.btn:hover {
+				background-color: #4f46e5;
+			}
+
+			.preview {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				display: none;
+			}
+
+			iframe {
+				width: 100%;
+				height: 100%;
+				border: none;
+			}
+
+			.toolbar {
+				position: fixed;
+				top: 16px;
+				right: 16px;
+				z-index: 1000;
+				display: flex;
+				gap: 8px;
+			}
+
+			.tool-btn {
+				width: 40px;
+				height: 40px;
+				border-radius: 50%;
+				background-color: #6366f1;
+				color: white;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				cursor: pointer;
+				font-size: 18px;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+				transition: all 0.2s;
+			}
+
+			.tool-btn:hover {
+				transform: scale(1.05);
+				background-color: #4f46e5;
+			}
+
+			.loading {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background-color: rgba(255, 255, 255, 0.9);
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				z-index: 2000;
+				display: none;
+			}
+
+			.spinner {
+				width: 48px;
+				height: 48px;
+				border: 4px solid rgba(99, 102, 241, 0.2);
+				border-radius: 50%;
+				border-left-color: #6366f1;
+				animation: spin 1s linear infinite;
+				margin-bottom: 24px;
+			}
+
+			@keyframes spin {
+				0% {
+					transform: rotate(0deg);
+				}
+				100% {
+					transform: rotate(360deg);
+				}
+			}
+
+			.toast {
+				position: fixed;
+				bottom: 24px;
+				left: 50%;
+				transform: translateX(-50%);
+				padding: 12px 24px;
+				border-radius: 8px;
+				color: white;
+				font-weight: 500;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+				z-index: 3000;
+				opacity: 0;
+				transition: opacity 0.3s;
+				pointer-events: none;
+			}
+
+			.toast.success {
+				background-color: #10b981;
+			}
+
+			.toast.error {
+				background-color: #ef4444;
+			}
+
+			.toast.info {
+				background-color: #3b82f6;
+			}
+
+			.toast.visible {
+				opacity: 1;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="app">
+			<div id="welcome" class="welcome">
+				<div id="dropArea" class="drop-area">
+					<svg
+						class="logo"
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 24 24"
+						fill="currentColor"
+					>
+						<path
+							d="M9 3H5C3.89543 3 3 3.89543 3 5V9C3 10.1046 3.89543 11 5 11H9C10.1046 11 11 10.1046 11 9V5C11 3.89543 10.1046 3 9 3Z"
+						/>
+						<path
+							d="M19 3H15C13.8954 3 13 3.89543 13 5V9C13 10.1046 13.8954 11 15 11H19C20.1046 11 21 10.1046 21 9V5C21 3.89543 20.1046 3 19 3Z"
+						/>
+						<path
+							d="M5 13H9C10.1046 13 11 13.8954 11 15V19C11 20.1046 10.1046 21 9 21H5C3.89543 21 3 20.1046 3 19V15C3 13.8954 3.89543 13 5 13Z"
+						/>
+						<path d="M17 16L21 16" />
+						<path d="M17 16L19 14" />
+						<path d="M17 16L19 18" />
+						<path d="M13 16L17 16" />
+					</svg>
+					<h1>DropServe</h1>
+					<p class="subtitle">Drag your static site folder here to instantly preview it</p>
+					<button id="selectBtn" class="btn">Choose Folder</button>
+				</div>
+			</div>
+
+			<div id="preview" class="preview">
+				<iframe id="previewFrame"></iframe>
+
+				<div class="toolbar">
+					<div id="backBtn" class="tool-btn" title="Back to welcome screen">↩</div>
+					<div id="refreshBtn" class="tool-btn" title="Refresh preview">⟳</div>
+				</div>
+			</div>
+
+			<div id="loading" class="loading">
+				<div class="spinner"></div>
+				<div id="loadingMessage">Loading...</div>
+			</div>
+
+			<div id="toast" class="toast"></div>
+		</div>
+
+		<script src="dropserve.js"></script>
+	</body>
 </html>
