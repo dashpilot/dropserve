@@ -1,608 +1,648 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>DropServe</title>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.12.3/cdn.min.js" defer></script>
-		<style>
-			* {
-				margin: 0;
-				padding: 0;
-				box-sizing: border-box;
-			}
-
-			body {
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-				height: 100vh;
-				background-color: #f9fafb;
-				display: flex;
-				flex-direction: column;
-			}
-
-			.welcome-container {
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				flex-direction: column;
-				height: 100vh;
-			}
-
-			.drop-zone {
-				width: 500px;
-				max-width: 90vw;
-				height: 400px;
-				padding: 25px;
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				justify-content: center;
-				text-align: center;
-				background: white;
-				border-radius: 10px;
-				box-shadow:
-					0 0 0 1px rgba(0, 0, 0, 0.05),
-					0 5px 15px rgba(0, 0, 0, 0.1);
-				border: 2px dashed #e5e7eb;
-				transition: all 0.2s ease;
-			}
-
-			.drop-zone.active {
-				border-color: #4f46e5;
-				background-color: rgba(79, 70, 229, 0.05);
-			}
-
-			.logo {
-				width: 80px;
-				height: 80px;
-				margin-bottom: 20px;
-			}
-
-			.title {
-				font-size: 32px;
-				font-weight: 700;
-				color: #4f46e5;
-				margin-bottom: 10px;
-			}
-
-			.subtitle {
-				color: #6b7280;
-				margin-bottom: 30px;
-			}
-
-			.btn {
-				background-color: #4f46e5;
-				color: white;
-				padding: 10px 20px;
-				border-radius: 6px;
-				border: none;
-				font-size: 16px;
-				font-weight: 500;
-				cursor: pointer;
-				transition: background-color 0.2s;
-			}
-
-			.btn:hover {
-				background-color: #4338ca;
-			}
-
-			.preview {
-				position: fixed;
-				top: 0;
-				left: 0;
-				width: 100%;
-				height: 100%;
-			}
-
-			.preview iframe {
-				width: 100%;
-				height: 100%;
-				border: none;
-			}
-
-			.toolbar {
-				position: fixed;
-				top: 15px;
-				right: 15px;
-				z-index: 1000;
-				display: flex;
-				gap: 10px;
-			}
-
-			.toolbar-btn {
-				width: 40px;
-				height: 40px;
-				border-radius: 20px;
-				background-color: #1f2937;
-				color: white;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				cursor: pointer;
-				font-size: 18px;
-				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-			}
-
-			.loading {
-				position: fixed;
-				top: 0;
-				left: 0;
-				width: 100%;
-				height: 100%;
-				background-color: rgba(255, 255, 255, 0.8);
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				justify-content: center;
-				z-index: 2000;
-			}
-
-			.spinner {
-				width: 40px;
-				height: 40px;
-				border: 4px solid rgba(79, 70, 229, 0.1);
-				border-radius: 50%;
-				border-left-color: #4f46e5;
-				animation: spin 1s ease infinite;
-				margin-bottom: 20px;
-			}
-
-			@keyframes spin {
-				0% {
-					transform: rotate(0deg);
-				}
-				100% {
-					transform: rotate(360deg);
-				}
-			}
-
-			.toast {
-				position: fixed;
-				bottom: 20px;
-				left: 50%;
-				transform: translateX(-50%);
-				padding: 12px 20px;
-				border-radius: 6px;
-				color: white;
-				font-weight: 500;
-				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-				z-index: 3000;
-			}
-
-			.toast.success {
-				background-color: #10b981;
-			}
-
-			.toast.error {
-				background-color: #ef4444;
-			}
-
-			.toast.info {
-				background-color: #3b82f6;
-			}
-		</style>
-	</head>
-	<body>
-		<div x-data="dropServe()">
-			<!-- Welcome Screen -->
-			<div
-				class="welcome-container"
-				x-show="!siteLoaded"
-				x-transition:leave="transition ease-out duration-300"
-				x-transition:leave-start="opacity-100"
-				x-transition:leave-end="opacity-0"
-			>
-				<div
-					class="drop-zone"
-					x-bind:class="{'active': isDragging}"
-					x-on:dragover.prevent="isDragging = true"
-					x-on:dragleave.prevent="isDragging = false"
-					x-on:drop.prevent="handleDrop($event)"
-				>
-					<img
-						src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjY2I5OTU5IiBkPSJNMzAuMjE3IDQyMS45MThMMC4wMDQgMjYyLjY5NEMwLjAwNCAyNDkuNTI5IDEwLjcyOSAyMzguODA0IDIzLjg5NCAyMzguODA0SDEzOC4wOTlDMTUxLjI2NCAyMzguODA0IDE2MS45ODkgMjQ5LjUyOSAxNjEuOTg5IDI2Mi42OTRWNDIxLjkxOEMxNjEuOTg5IDQzNS4wODIgMTUxLjI2NCA0NDUuODA3IDEzOC4wOTkgNDQ1LjgwN0gyMy44OTRDMTAuNzI5IDQ0NS44MDcgMC4wMDQgNDM1LjA4MiAwLjAwNCA0MjEuOTE4WiIvPjxwYXRoIGZpbGw9IiNkOGIwN2EiIGQ9Ik0zMC4yMTcgNDIxLjkxOEwwLjAwNCAyNjIuNjk0QzAuMDA0IDI0OS41MjkgMTAuNzI5IDIzOC44MDQgMjMuODk0IDIzOC44MDRIODEuMTExQzk0LjI3NiAyMzguODA0IDEwNS4wMDEgMjQ5LjUyOSAxMDUuMDAxIDI2Mi42OTRWNDIxLjkxOEMxMDUuMDAxIDQzNS4wODIgOTQuMjc2IDQ0NS44MDcgODEuMTExIDQ0NS44MDdIMjMuODk0QzEwLjcyOSA0NDUuODA3IDAuMDA0IDQzNS4wODIgMC4wMDQgNDIxLjkxOFoiLz48cGF0aCBmaWxsPSIjYzM4ZjU4IiBkPSJNODEuMTA2IDIzOC44MDRIODFMMTYxLjk4NCAyNjIuNjk0VjQyMS45MThDMTYxLjk4NCA0MzUuMDgyIDE1MS4yNTkgNDQ1LjgwNyAxMzguMDk0IDQ0NS44MDdIODEuMTA2Qzk0LjI3MSA0NDUuODA3IDEwNC45OTYgNDM1LjA4MiAxMDQuOTk2IDQyMS45MThWMjYyLjY5NEMxMDQuOTk2IDI0OS41MjkgOTQuMjcxIDIzOC44MDQgODEuMTA2IDIzOC44MDRaIi8+PHBhdGggZmlsbD0iI2NiOTk1OSIgZD0iTTM1MC4wMTYgNDIxLjkxOEwzNTAuMDExIDI2Mi42OTRDMzUwLjAxMSAyNDkuNTI5IDM2MC43MzYgMjM4LjgwNCAzNzMuOTAxIDIzOC44MDRINDg4LjEwNkM1MDEuMjcxIDIzOC44MDQgNTExLjk5NiAyNDkuNTI5IDUxMS45OTYgMjYyLjY5NFY0MjEuOTE4QzUxMS45OTYgNDM1LjA4MiA1MDEuMjcxIDQ0NS44MDcgNDg4LjEwNiA0NDUuODA3SDM3My45MDFDMzYwLjczNiA0NDUuODA3IDM1MC4wMTEgNDM1LjA4MiAzNTAuMDE2IDQyMS45MThaIi8+PHBhdGggZmlsbD0iI2Q4YjA3YSIgZD0iTTM1MC4wMTYgNDIxLjkxOEwzNTAuMDExIDI2Mi42OTRDMzUwLjAxMSAyNDkuNTI5IDM2MC43MzYgMjM4LjgwNCAzNzMuOTAxIDIzOC44MDRINDMxLjExOEM0NDQuMjgzIDIzOC44MDQgNDU1LjAwOCAyNDkuNTI5IDQ1NS4wMDggMjYyLjY5NFY0MjEuOTE4QzQ1NS4wMDggNDM1LjA4MiA0NDQuMjgzIDQ0NS44MDcgNDMxLjExOCA0NDUuODA3SDM3My45MDFDMzYwLjczNiA0NDUuODA3IDM1MC4wMTEgNDM1LjA4MiAzNTAuMDE2IDQyMS45MThaIi8+PHBhdGggZmlsbD0iI2MzOGY1OCIgZD0iTTQzMC45ODkgMjM4LjgwNEg0MzEuMTE4QzQ0NC4yODMgMjM4LjgwNCA0NTUuMDA4IDI0OS41MjkgNDU1LjAwOCAyNjIuNjk0VjQyMS45MThDNDU1LjAwOCA0MzUuMDgyIDQ0NC4yODMgNDQ1LjgwNyA0MzEuMTE4IDQ0NS44MDdINDMwLjk4OUM0NDQuMTU0IDQ0NS44MDcgNDU0Ljg3OSA0MzUuMDgyIDQ1NC44NzkgNDIxLjkxOFYyNjIuNjk0QzQ1NC44NzkgMjQ5LjUyOSA0NDQuMTU0IDIzOC44MDQgNDMwLjk4OSAyMzguODA0WiIvPjxwYXRoIGZpbGw9IiNlNWFhNmUiIGQ9Ik0xNzUuOTkyIDQ5NC45OTdMMTc1Ljk5MiA4NS4xOTNDMTc1Ljk5MiA3Mi4wMjggMTg2LjcxNyA2MS4zMDMgMTk5Ljg4MiA2MS4zMDNIMzEyLjExOEMzMjUuMjgzIDYxLjMwMyAzMzYuMDA4IDcyLjAyOCAzMzYuMDA4IDg1LjE5M1Y0OTQuOTk3SDMzNi4wMDNDMzM2LjAwMyA1MDIuNjYyIDMyOS44MzkgNTA4LjgyNiAzMjIuMTc0IDUwOC44MjZIMTg5LjgyQzE4Mi4xNTYgNTA4LjgyNiAxNzUuOTkyIDUwMi42NjIgMTc1Ljk5MiA0OTQuOTk3WiIvPjxwYXRoIGZpbGw9IiNlZGJjNzkiIGQ9Ik0xNzUuOTkyIDQ5NC45OTdMMTc1Ljk5MiA4NS4xOTNDMTc1Ljk5MiA3Mi4wMjggMTg2LjcxNyA2MS4zMDMgMTk5Ljg4MiA2MS4zMDNIMjU2LjAyMkMyNjkuMTg3IDYxLjMwMyAyNzkuOTEyIDcyLjAyOCAyNzkuOTEyIDg1LjE5M1Y0OTQuOTk3QzI3OS45MTIgNTAyLjY2MiAyNzMuNzQ4IDUwOC44MjYgMjY2LjA4MyA1MDguODI2SDE4OS44MkMxODIuMTU2IDUwOC44MjYgMTc1Ljk5MiA1MDIuNjYyIDE3NS45OTIgNDk0Ljk5N1oiLz48cGF0aCBmaWxsPSIjZTI5ZDRiIiBkPSJNMjU2LjAxNyA2MS4zMDNIMjU2LjAyMkMyNjkuMTg3IDYxLjMwMyAyNzkuOTEyIDcyLjAyOCAyNzkuOTEyIDg1LjE5M1Y0OTQuOTk3QzI3OS45MTIgNTAyLjY2MiAyNzMuNzQ4IDUwOC44MjYgMjY2LjA4MyA1MDguODI2SDI1Ni4wMTdDMjYzLjY4MiA1MDguODI2IDI2OS44NDYgNTAyLjY2MiAyNjkuODQ2IDQ5NC45OTdWODUuMTkzQzI2OS44NDYgNzIuMDI4IDI1OS4xMjEgNjEuMzAzIDI0NS45NTYgNjEuMzAzSDI1Ni4wMTdaIi8+PHBhdGggZmlsbD0iI2U1YWE2ZSIgZD0iTTM5MC4wMTYgMTA4LjgwMkw0MjEuOTk1IDI2Mi42OTRDNDIxLjk5NSAyNDkuNTI5IDQzMi43MjAgMjM4LjgwNCA0NDUuODg1IDIzOC44MDRINDg4LjEwNkM1MDEuMjcxIDIzOC44MDQgNTExLjk5NiAyNDkuNTI5IDUxMS45OTYgMjYyLjY5NFYxMzIuNjkyQzUxMS45OTYgMTE5LjUyNyA1MDEuMjcxIDEwOC44MDIgNDg4LjEwNiAxMDguODAySDM5MC4wMTZaIi8+PHBhdGggZmlsbD0iI2VkYmM3OSIgZD0iTTM5MC4wMTYgMTA4LjgwMkw0MjEuOTk1IDI2Mi42OTRDNDIxLjk5NSAyNDkuNTI5IDQzMi43MjAgMjM4LjgwNCA0NDUuODg1IDIzOC44MDRINDYyLjAxM0M0NzUuMTc4IDIzOC44MDQgNDg1LjkwMyAyNDkuNTI5IDQ4NS45MDMgMjYyLjY5NFYxMzIuNjkyQzQ4NS45MDMgMTE5LjUyNyA0NzUuMTc4IDEwOC44MDIgNDYyLjAxMyAxMDguODAySDM5MC4wMTZaIi8+PHBhdGggZmlsbD0iI2UyOWQ0YiIgZD0iTTQ2MS45IDEwOC44MDJINDYyLjAxQzQ3NS4xNzUgMTA4LjgwMiA0ODUuOSAxMTkuNTI3IDQ4NS45IDEzMi42OTJWMDI2Mi42OTRDNDg1LjkgMjQ5LjUyOSA0NzUuMTc1IDIzOC44MDQgNDYyLjAxIDIzOC44MDRINDYxLjlDNDc1LjA2NSAyMzguODA0IDQ4NS43OSAyNDkuNTI5IDQ4NS43OSAyNjIuNjk0VjEzMi42OTJDNDg1Ljc5IDExOS41MjcgNDc1LjA2NSAxMDguODAyIDQ2MS45IDEwOC44MDJaIi8+PHBhdGggZmlsbD0iI2U1YWE2ZSIgZD0iTTEyMS45ODQgMTA4LjgwMkwyMi4wMDYgMjYyLjY5NEMyMi4wMDYgMjQ5LjUyOSAxMS4yODEgMjM4LjgwNC0xLjg4NCAyMzguODA0aC00Mi4yMjFjLTEzLjE2NSAwLTIzLjg5LDEwLjcyNS0yMy44OSwyMy44OTF2MTMwLjAwMWMwLDEzLjE2NSAxMC43MjUgMjMuODkgMjMuODkgMjMuODloOTguMTA1TDEyMS45ODQgMTA4LjgwMnoiLz48cGF0aCBmaWxsPSIjZWRiYzc5IiBkPSJNMTIxLjk4NCAxMDguODAyTDIyLjAwNiAyNjIuNjk0QzIyLjAwNiAyNDkuNTI5IDExLjI4MSAyMzguODA0LTEuODg0IDIzOC44MDRoLTE2LjEyOGMtMTMuMTY1IDAtMjMuODksMTAuNzI1LTIzLjg5LDIzLjg5MXYxMzAuMDAxYzAsMTMuMTY1IDEwLjcyNSAyMy44OSAyMy44OSAyMy44OWg3MS45ODRMMTI1Ljk1MiAxMDguODAyeiIvPjxwYXRoIGZpbGw9IiNlMjlkNGIiIGQ9Ik01MC4wNyAxMDguODAyTDUwLjA5NSAxMDguODAyTDMuOTk2IDIzOC44MDRILTEuODg0Qy0xNS4wNDkgMjM4LjgwNCAtMjUuNzc0IDI0OS41MjkgLTI1Ljc3NCAyNjIuNjk0VjEzMi42OTJDLTI1Ljc3NCAxMTkuNTI3IC0xNS4wNDkgMTA4LjgwMiAtMS44ODQgMTA4LjgwMkw1MC4wNyAxMDguODAyeiIvPjxwYXRoIGZpbGw9IiM1YzU1ZTUiIGQ9Ik0yMjcuMzc0IDE2OC4zMjVIMTEwLjEzOUw4OS41OTIgMjM4LjgwNGgxMjAuNzV2LTU3LjU4OUM0MTAuNDE5IDIzOC44MDQgNDIyLjQwOCAxNjguMzI1IDQyMi40MDggMTY4LjMyNUgzMDUuMTc0QzIzNC45OSAxNjguMzI1IDIzNi40ODMgNzAuMzQzIDIyNy4zNzMgMTY4LjMyNXoiLz48cGF0aCBmaWxsPSIjNGY0NmU1IiBkPSJNMjM2LjQ4NCA3MC4zNDFDMjM3Ljc1OSA0NS43MTQgMjM0LjUyOCAxLjE3NCAyNzMuNzUgMS4xNzRIMzA0Ljc4MUMzNTkuNjIyIDEuMTc0IDM1My4xMzkgMTAzLjQ5IDMwNS4xNzQgMTY4LjMyNUgyODkuMDQ2QzMzNy4wMTEgMTAzLjQ5IDM0My40OTQgMS4xNzQgMjg4LjY1MyAxLjE3NEgyNzMuNzVDMjM0LjUyOCAxLjE3NCAyMzcuNzU5IDQ1LjcxNCAyMzYuNDg0IDcwLjM0MVoiLz48cGF0aCBmaWxsPSIjNjk2M2ZmIiBkPSJNMTEwLjE0IDE2OC4zMjVIMTI2LjI2N0wxMDUuNzIxIDIzOC44MDRIODkuNTkyTDExMC4xNCAxNjguMzI1eiIvPjwvc3ZnPg=="
-						class="logo"
-						alt="Box logo"
-					/>
-					<h1 class="title">DropServe</h1>
-					<p class="subtitle">Drag your static site folder here to instantly preview it</p>
-					<button class="btn" x-on:click="selectFolder">Choose Folder</button>
-				</div>
-			</div>
-
-			<!-- Preview Screen -->
-			<div x-show="siteLoaded" class="preview">
-				<iframe x-ref="previewFrame"></iframe>
-
-				<div class="toolbar">
-					<div class="toolbar-btn" x-on:click="resetApp" title="Choose another folder">↩</div>
-					<div class="toolbar-btn" x-on:click="refreshPreview" title="Refresh preview">⟳</div>
-				</div>
-			</div>
-
-			<!-- Loading Screen -->
-			<div x-show="loading" class="loading">
-				<div class="spinner"></div>
-				<div x-text="loadingMessage"></div>
-			</div>
-
-			<!-- Toast Message -->
-			<div
-				x-show="toastVisible"
-				x-transition:enter="transition ease-out duration-300"
-				x-transition:enter-start="opacity-0 transform translate-y-2"
-				x-transition:enter-end="opacity-100 transform translate-y-0"
-				x-transition:leave="transition ease-in duration-200"
-				x-transition:leave-start="opacity-100 transform translate-y-0"
-				x-transition:leave-end="opacity-0 transform translate-y-2"
-				x-bind:class="['toast', toastType]"
-				x-text="toastMessage"
-			></div>
-		</div>
-
-		<script>
-			function dropServe() {
-				return {
-					// State
-					isDragging: false,
-					siteLoaded: false,
-					loading: false,
-					loadingMessage: 'Loading...',
-
-					// Toast
-					toastVisible: false,
-					toastMessage: '',
-					toastType: 'info',
-					toastTimeout: null,
-
-					// Site data
-					rootDirHandle: null,
-					indexFileHandle: null,
-					siteName: '',
-					assetCache: {},
-
-					// Initialize
-					init() {
-						if (!('showDirectoryPicker' in window)) {
-							this.showToast(
-								"Your browser doesn't support the File System Access API. Please use Chrome, Edge, or another Chromium-based browser.",
-								'error'
-							);
-						}
-					},
-
-					// Select folder via button
-					async selectFolder() {
-						try {
-							const dirHandle = await window.showDirectoryPicker();
-							await this.processFolder(dirHandle);
-						} catch (error) {
-							if (error.name !== 'AbortError') {
-								this.showToast(`Error selecting folder: ${error.message}`, 'error');
-								console.error(error);
-							}
-						}
-					},
-
-					// Handle drag and drop
-					async handleDrop(event) {
-						this.isDragging = false;
-
-						const items = event.dataTransfer.items;
-						if (!items || items.length === 0) {
-							this.showToast('No items were dropped', 'error');
-							return;
-						}
-
-						const item = items[0];
-
-						if (item.kind === 'file' && typeof item.webkitGetAsEntry === 'function') {
-							const entry = item.webkitGetAsEntry();
-
-							if (entry && entry.isDirectory) {
-								try {
-									const dirHandle = await this.getDirectoryHandleFromDrop(entry);
-									await this.processFolder(dirHandle);
-								} catch (error) {
-									this.showToast(`Error processing dropped folder: ${error.message}`, 'error');
-									console.error(error);
-								}
-							} else {
-								this.showToast('Please drop a folder, not a file', 'error');
-							}
-						} else {
-							this.showToast('Unsupported drop item', 'error');
-						}
-					},
-
-					// Convert drop entry to directory handle
-					async getDirectoryHandleFromDrop(entry) {
-						try {
-							const dirHandle = await window.showDirectoryPicker();
-							return dirHandle;
-						} catch (error) {
-							throw new Error(
-								"Couldn't access the dropped folder. Please use the 'Choose Folder' button instead."
-							);
-						}
-					},
-
-					// Process the selected folder
-					async processFolder(dirHandle) {
-						this.loading = true;
-						this.loadingMessage = 'Looking for index.html...';
-						this.rootDirHandle = dirHandle;
-						this.siteName = dirHandle.name;
-
-						try {
-							let indexFile = await this.findIndexFile(dirHandle);
-
-							if (indexFile) {
-								this.indexFileHandle = indexFile;
-								await this.processIndexFile(indexFile);
-								this.siteLoaded = true;
-								this.showToast(`Site "${this.siteName}" loaded successfully!`, 'success');
-							} else {
-								throw new Error(`No index.html found in "${this.siteName}" folder`);
-							}
-						} catch (error) {
-							this.showToast(error.message, 'error');
-							console.error(error);
-						} finally {
-							this.loading = false;
-						}
-					},
-
-					// Find index.html file
-					async findIndexFile(dirHandle) {
-						const indexFileNames = ['index.html', 'index.htm', 'default.html', 'default.htm'];
-
-						for (const fileName of indexFileNames) {
-							try {
-								const fileHandle = await dirHandle.getFileHandle(fileName);
-								return fileHandle;
-							} catch (error) {
-								// File not found, try the next one
-							}
-						}
-
-						return null;
-					},
-
-					// Process and display index.html
-					async processIndexFile(fileHandle) {
-						this.loadingMessage = 'Processing index.html...';
-
-						try {
-							const file = await fileHandle.getFile();
-							const content = await file.text();
-
-							this.loadingMessage = 'Processing assets...';
-							const processedHtml = await this.processHtml(content);
-
-							// Create a blob URL for the processed HTML
-							const blob = new Blob([processedHtml], { type: 'text/html' });
-							const url = URL.createObjectURL(blob);
-
-							// Display in the iframe
-							this.$refs.previewFrame.src = url;
-						} catch (error) {
-							throw new Error(`Error processing index file: ${error.message}`);
-						}
-					},
-
-					// Process HTML to handle asset references
-					async processHtml(html) {
-						// Create a DOM parser to handle HTML
-						const parser = new DOMParser();
-						const doc = parser.parseFromString(html, 'text/html');
-
-						// Add a base tag to help with relative paths
-						const baseElement = doc.createElement('base');
-						baseElement.href = '/';
-						doc.head.insertBefore(baseElement, doc.head.firstChild);
-
-						// Process CSS link tags
-						const linkTags = doc.querySelectorAll('link[rel="stylesheet"]');
-						for (const link of linkTags) {
-							await this.processAssetReference(link, 'href');
-						}
-
-						// Process script tags
-						const scriptTags = doc.querySelectorAll('script[src]');
-						for (const script of scriptTags) {
-							await this.processAssetReference(script, 'src');
-						}
-
-						// Process image tags
-						const imgTags = doc.querySelectorAll('img[src]');
-						for (const img of imgTags) {
-							await this.processAssetReference(img, 'src');
-						}
-
-						return doc.documentElement.outerHTML;
-					},
-
-					// Process an individual asset reference
-					async processAssetReference(element, attributeName) {
-						const path = element.getAttribute(attributeName);
-
-						// Skip external references
-						if (
-							!path ||
-							path.startsWith('http://') ||
-							path.startsWith('https://') ||
-							path.startsWith('//') ||
-							path.startsWith('data:') ||
-							path.startsWith('blob:')
-						) {
-							return;
-						}
-
-						try {
-							// Get blob URL for the asset
-							const blobUrl = await this.getAssetUrl(path);
-
-							// Update the element attribute
-							element.setAttribute(attributeName, blobUrl);
-
-							// Remove crossorigin attribute if present
-							if (element.hasAttribute('crossorigin')) {
-								element.removeAttribute('crossorigin');
-							}
-						} catch (error) {
-							console.warn(`Could not process asset: ${path}`, error);
-						}
-					},
-
-					// Resolve asset path and create blob URL
-					async getAssetUrl(path) {
-						// Check cache first
-						if (this.assetCache[path]) {
-							return this.assetCache[path];
-						}
-
-						// Remove leading slash if present
-						const normalizedPath = path.startsWith('/') ? path.substring(1) : path;
-
-						// Split path into components
-						const pathParts = normalizedPath.split('/').filter((part) => part.length > 0);
-
-						try {
-							// Start from root directory
-							let currentHandle = this.rootDirHandle;
-
-							// Navigate through path components
-							for (let i = 0; i < pathParts.length - 1; i++) {
-								const part = pathParts[i];
-
-								// Handle relative paths
-								if (part === '..') {
-									throw new Error('Cannot navigate above root directory');
-								} else if (part !== '.') {
-									try {
-										currentHandle = await currentHandle.getDirectoryHandle(part);
-									} catch (error) {
-										throw new Error(`Directory not found: ${part}`);
-									}
-								}
-							}
-
-							// Get the file
-							const fileName = pathParts[pathParts.length - 1];
-							const fileHandle = await currentHandle.getFileHandle(fileName);
-							const file = await fileHandle.getFile();
-
-							// Determine content type
-							const fileExt = fileName.split('.').pop().toLowerCase();
-							let contentType = 'application/octet-stream';
-
-							switch (fileExt) {
-								case 'html':
-								case 'htm':
-									contentType = 'text/html';
-									break;
-								case 'css':
-									contentType = 'text/css';
-									break;
-								case 'js':
-									contentType = 'application/javascript';
-									break;
-								case 'json':
-									contentType = 'application/json';
-									break;
-								case 'png':
-									contentType = 'image/png';
-									break;
-								case 'jpg':
-								case 'jpeg':
-									contentType = 'image/jpeg';
-									break;
-								case 'gif':
-									contentType = 'image/gif';
-									break;
-								case 'svg':
-									contentType = 'image/svg+xml';
-									break;
-								case 'webp':
-									contentType = 'image/webp';
-									break;
-								case 'woff':
-									contentType = 'font/woff';
-									break;
-								case 'woff2':
-									contentType = 'font/woff2';
-									break;
-								case 'ttf':
-									contentType = 'font/ttf';
-									break;
-								case 'otf':
-									contentType = 'font/otf';
-									break;
-							}
-
-							// Create a blob with correct MIME type
-							const fileContent = await file.arrayBuffer();
-							const blob = new Blob([fileContent], { type: contentType });
-							const blobUrl = URL.createObjectURL(blob);
-
-							// Cache the URL
-							this.assetCache[path] = blobUrl;
-
-							return blobUrl;
-						} catch (error) {
-							console.error(`Error loading asset: ${path}`, error);
-							throw error;
-						}
-					},
-
-					// Refresh the preview
-					refreshPreview() {
-						if (this.indexFileHandle) {
-							this.processIndexFile(this.indexFileHandle);
-							this.showToast('Preview refreshed', 'info');
-						}
-					},
-
-					// Reset the app
-					resetApp() {
-						// Revoke blob URLs
-						Object.values(this.assetCache).forEach((url) => {
-							URL.revokeObjectURL(url);
-						});
-
-						// Reset state
-						this.siteLoaded = false;
-						this.rootDirHandle = null;
-						this.indexFileHandle = null;
-						this.siteName = '';
-						this.assetCache = {};
-
-						// Clear iframe
-						if (this.$refs.previewFrame) {
-							this.$refs.previewFrame.src = 'about:blank';
-						}
-					},
-
-					// Show toast message
-					showToast(message, type = 'info') {
-						// Clear any existing timeout
-						if (this.toastTimeout) {
-							clearTimeout(this.toastTimeout);
-						}
-
-						// Set message
-						this.toastMessage = message;
-						this.toastType = type;
-						this.toastVisible = true;
-
-						// Auto-hide after 4 seconds
-						this.toastTimeout = setTimeout(() => {
-							this.toastVisible = false;
-						}, 4000);
-					}
-				};
-			}
-		</script>
-	</body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DropServe</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      height: 100vh;
+      background-color: #f5f7ff;
+      color: #333;
+    }
+    
+    .welcome {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      height: 100vh;
+    }
+    
+    .drop-area {
+      width: 500px;
+      max-width: 90vw;
+      padding: 40px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      text-align: center;
+      border: 2px dashed #e0e4ff;
+      transition: all 0.2s ease;
+    }
+    
+    .drop-area.active {
+      border-color: #6366F1;
+      background-color: #f5f7ff;
+    }
+    
+    .logo {
+      display: block;
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      color: #6366F1;
+    }
+    
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      color: #6366F1;
+      margin-bottom: 16px;
+    }
+    
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 32px;
+      font-size: 18px;
+    }
+    
+    .btn {
+      background-color: #6366F1;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .btn:hover {
+      background-color: #4F46E5;
+    }
+    
+    .preview {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+    
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    
+    .toolbar {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 1000;
+      display: flex;
+      gap: 8px;
+    }
+    
+    .tool-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: #6366F1;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: all 0.2s;
+    }
+    
+    .tool-btn:hover {
+      transform: scale(1.05);
+      background-color: #4F46E5;
+    }
+    
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255,255,255,0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      display: none;
+    }
+    
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(99, 102, 241, 0.2);
+      border-radius: 50%;
+      border-left-color: #6366F1;
+      animation: spin 1s linear infinite;
+      margin-bottom: 24px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      z-index: 3000;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    
+    .toast.success {
+      background-color: #10B981;
+    }
+    
+    .toast.error {
+      background-color: #EF4444;
+    }
+    
+    .toast.info {
+      background-color: #3B82F6;
+    }
+    
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="welcome" class="welcome">
+      <div id="dropArea" class="drop-area">
+        <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M9 3H5C3.89543 3 3 3.89543 3 5V9C3 10.1046 3.89543 11 5 11H9C10.1046 11 11 10.1046 11 9V5C11 3.89543 10.1046 3 9 3Z" />
+          <path d="M19 3H15C13.8954 3 13 3.89543 13 5V9C13 10.1046 13.8954 11 15 11H19C20.1046 11 21 10.1046 21 9V5C21 3.89543 20.1046 3 19 3Z" />
+          <path d="M5 13H9C10.1046 13 11 13.8954 11 15V19C11 20.1046 10.1046 21 9 21H5C3.89543 21 3 20.1046 3 19V15C3 13.8954 3.89543 13 5 13Z" />
+          <path d="M17 16L21 16" />
+          <path d="M17 16L19 14" />
+          <path d="M17 16L19 18" />
+          <path d="M13 16L17 16" />
+        </svg>
+        <h1>DropServe</h1>
+        <p class="subtitle">Drag your static site folder here to instantly preview it</p>
+        <button id="selectBtn" class="btn">Choose Folder</button>
+      </div>
+    </div>
+    
+    <div id="preview" class="preview">
+      <iframe id="previewFrame"></iframe>
+      
+      <div class="toolbar">
+        <div id="backBtn" class="tool-btn" title="Back to welcome screen">↩</div>
+        <div id="refreshBtn" class="tool-btn" title="Refresh preview">⟳</div>
+      </div>
+    </div>
+    
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <div id="loadingMessage">Loading...</div>
+    </div>
+    
+    <div id="toast" class="toast"></div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // DOM Elements
+      const welcomeScreen = document.getElementById('welcome');
+      const previewScreen = document.getElementById('preview');
+      const loadingScreen = document.getElementById('loading');
+      const dropArea = document.getElementById('dropArea');
+      const selectBtn = document.getElementById('selectBtn');
+      const backBtn = document.getElementById('backBtn');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const previewFrame = document.getElementById('previewFrame');
+      const loadingMessage = document.getElementById('loadingMessage');
+      const toast = document.getElementById('toast');
+      
+      // State variables
+      let rootDirHandle = null;
+      let indexFileHandle = null;
+      
+      // Event Listeners
+      selectBtn.addEventListener('click', selectFolder);
+      backBtn.addEventListener('click', resetApp);
+      refreshBtn.addEventListener('click', refreshPreview);
+      
+      // Drag and drop handlers
+      dropArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropArea.classList.add('active');
+      });
+      
+      dropArea.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropArea.classList.remove('active');
+      });
+      
+      dropArea.addEventListener('drop', handleDrop);
+      
+      // Check if File System Access API is supported
+      if (!('showDirectoryPicker' in window)) {
+        showToast("Your browser doesn't support the File System Access API. Please use Chrome, Edge, or another Chromium-based browser.", 'error');
+      }
+      
+      // Functions
+      async function selectFolder() {
+        try {
+          const dirHandle = await window.showDirectoryPicker();
+          await processFolder(dirHandle);
+        } catch (error) {
+          if (error.name !== 'AbortError') {
+            showToast(`Error selecting folder: ${error.message}`, 'error');
+            console.error(error);
+          }
+        }
+      }
+      
+      async function handleDrop(e) {
+        e.preventDefault();
+        dropArea.classList.remove('active');
+        
+        const items = e.dataTransfer.items;
+        if (!items || items.length === 0) {
+          showToast('No items were dropped', 'error');
+          return;
+        }
+        
+        const item = items[0];
+        
+        if (item.kind === 'file' && typeof item.webkitGetAsEntry === 'function') {
+          const entry = item.webkitGetAsEntry();
+          
+          if (entry && entry.isDirectory) {
+            try {
+              // When dropping, we need to ask the user again for permission
+              const dirHandle = await window.showDirectoryPicker();
+              await processFolder(dirHandle);
+            } catch (error) {
+              showToast(`Error processing dropped folder: ${error.message}`, 'error');
+              console.error(error);
+            }
+          } else {
+            showToast('Please drop a folder, not a file', 'error');
+          }
+        } else {
+          showToast('Unsupported drop item', 'error');
+        }
+      }
+      
+      async function processFolder(dirHandle) {
+        showLoading('Analyzing folder...');
+        rootDirHandle = dirHandle;
+        
+        try {
+          // Find index.html
+          let indexFile = await findIndexFile(dirHandle);
+          
+          if (indexFile) {
+            indexFileHandle = indexFile;
+            await processIndexFile(indexFile);
+            
+            // Switch to preview
+            welcomeScreen.style.display = 'none';
+            previewScreen.style.display = 'block';
+            
+            showToast(`Site "${dirHandle.name}" loaded successfully!`, 'success');
+          } else {
+            throw new Error(`No index.html found in "${dirHandle.name}" folder`);
+          }
+        } catch (error) {
+          showToast(error.message, 'error');
+          console.error(error);
+        } finally {
+          hideLoading();
+        }
+      }
+      
+      async function findIndexFile(dirHandle) {
+        const indexFiles = ['index.html', 'index.htm', 'default.html', 'default.htm'];
+        
+        for (const fileName of indexFiles) {
+          try {
+            return await dirHandle.getFileHandle(fileName);
+          } catch (error) {
+            // File not found, continue to next
+          }
+        }
+        
+        return null;
+      }
+      
+      async function processIndexFile(fileHandle) {
+        showLoading('Processing index.html...');
+        
+        try {
+          const file = await fileHandle.getFile();
+          const content = await file.text();
+          
+          // Create a server script to intercept resource requests
+          const serverScript = `
+            <script>
+              // Virtual server for handling asset requests
+              (function() {
+                // Map to track pending asset requests
+                const pendingRequests = new Map();
+                let requestId = 0;
+                
+                // Listen for message from parent frame
+                window.addEventListener('message', function(event) {
+                  const message = event.data;
+                  
+                  if (message.type === 'assetResponse') {
+                    const callback = pendingRequests.get(message.id);
+                    if (callback) {
+                      callback(message.content, message.contentType);
+                      pendingRequests.delete(message.id);
+                    }
+                  }
+                });
+                
+                // Override fetch
+                const originalFetch = window.fetch;
+                window.fetch = function(url, options) {
+                  // Only intercept same-origin requests
+                  if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//') && 
+                      !url.startsWith('data:') && !url.startsWith('blob:')) {
+                    return new Promise((resolve, reject) => {
+                      const id = requestId++;
+                      
+                      // Store callback
+                      pendingRequests.set(id, (content, contentType) => {
+                        if (content === null) {
+                          reject(new Error('Asset not found: ' + url));
+                          return;
+                        }
+                        
+                        // Convert base64 to blob
+                        const binaryString = atob(content);
+                        const bytes = new Uint8Array(binaryString.length);
+                        for (let i = 0; i < binaryString.length; i++) {
+                          bytes[i] = binaryString.charCodeAt(i);
+                        }
+                        
+                        const blob = new Blob([bytes], { type: contentType });
+                        const response = new Response(blob, {
+                          status: 200,
+                          statusText: 'OK',
+                          headers: { 'Content-Type': contentType }
+                        });
+                        
+                        resolve(response);
+                      });
+                      
+                      // Request asset from parent frame
+                      window.parent.postMessage({
+                        type: 'assetRequest',
+                        id: id,
+                        path: url
+                      }, '*');
+                    });
+                  }
+                  
+                  // Pass through other requests
+                  return originalFetch(url, options);
+                };
+                
+                // Override XMLHttpRequest
+                const XHROpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                  // Only intercept same-origin requests
+                  if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('//') && 
+                      !url.startsWith('data:') && !url.startsWith('blob:')) {
+                    const xhr = this;
+                    const id = requestId++;
+                    
+                    // Store original onload and onerror
+                    const originalOnload = xhr.onload;
+                    const originalOnerror = xhr.onerror;
+                    
+                    // Override onload and onerror
+                    xhr._url = url;
+                    xhr._pendingId = id;
+                    
+                    // Store callback
+                    pendingRequests.set(id, (content, contentType) => {
+                      if (content === null) {
+                        const error = new Error('Asset not found: ' + url);
+                        xhr.status = 404;
+                        xhr.statusText = 'Not Found';
+                        xhr.responseType = 'text';
+                        xhr.response = xhr.responseText = error.message;
+                        if (xhr.onerror) xhr.onerror();
+                        return;
+                      }
+                      
+                      // Convert base64 to blob
+                      const binaryString = atob(content);
+                      const bytes = new Uint8Array(binaryString.length);
+                      for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                      }
+                      
+                      const blob = new Blob([bytes], { type: contentType });
+                      const blobUrl = URL.createObjectURL(blob);
+                      
+                      // Call the original XHR with the blob URL
+                      XHROpen.call(xhr, method, blobUrl, ...args);
+                      xhr.send();
+                    });
+                    
+                    // Request asset from parent frame
+                    window.parent.postMessage({
+                      type: 'assetRequest',
+                      id: id,
+                      path: url
+                    }, '*');
+                    
+                    // Prevent actual XHR for now
+                    return XHROpen.call(this, 'GET', 'about:blank', ...args);
+                  }
+                  
+                  // Pass through other requests
+                  return XHROpen.call(this, method, url, ...args);
+                };
+              })();
+            </script>
+          `;
+          
+          // Insert server script at beginning of body
+          let modifiedHtml;
+          if (content.includes('<body>')) {
+            modifiedHtml = content.replace('<body>', '<body>' + serverScript);
+          } else if (content.includes('<body ')) {
+            modifiedHtml = content.replace(/<body ([^>]*)>/, '<body $1>' + serverScript);
+          } else {
+            modifiedHtml = content + serverScript;
+          }
+          
+          // Create blob URL
+          const blob = new Blob([modifiedHtml], { type: 'text/html' });
+          const url = URL.createObjectURL(blob);
+          
+          // Load in iframe
+          previewFrame.src = url;
+        } catch (error) {
+          throw new Error(`Error processing index file: ${error.message}`);
+        }
+      }
+      
+      async function getAssetContent(path) {
+        // Remove query string and hash
+        const cleanPath = path.split('?')[0].split('#')[0];
+        
+        // Handle absolute paths
+        const normalizedPath = cleanPath.startsWith('/') ? cleanPath.substring(1) : cleanPath;
+        
+        if (!normalizedPath) {
+          return { content: null, contentType: null };
+        }
+        
+        try {
+          const pathParts = normalizedPath.split('/');
+          const fileName = pathParts.pop();
+          let currentDir = rootDirHandle;
+          
+          // Navigate through directories
+          for (const part of pathParts) {
+            if (!part || part === '.') continue;
+            if (part === '..') throw new Error('Cannot navigate above root directory');
+            
+            try {
+              currentDir = await currentDir.getDirectoryHandle(part);
+            } catch (error) {
+              return { content: null, contentType: null };
+            }
+          }
+          
+          // Get file
+          let fileHandle;
+          try {
+            fileHandle = await currentDir.getFileHandle(fileName);
+          } catch (error) {
+            return { content: null, contentType: null };
+          }
+          
+          // Read file and convert to base64
+          const file = await fileHandle.getFile();
+          const contentType = getContentType(fileName);
+          const arrayBuffer = await file.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64 = btoa(binary);
+          
+          return { content: base64, contentType };
+        } catch (error) {
+          console.error(`Error loading asset: ${path}`, error);
+          return { content: null, contentType: null };
+        }
+      }
+      
+      function getContentType(fileName) {
+        const extension = fileName.split('.').pop().toLowerCase();
+        
+        const contentTypes = {
+          'html': 'text/html',
+          'htm': 'text/html',
+          'css': 'text/css',
+          'js': 'application/javascript',
+          'mjs': 'application/javascript',
+          'json': 'application/json',
+          'svg': 'image/svg+xml',
+          'png': 'image/png',
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'gif': 'image/gif',
+          'webp': 'image/webp',
+          'ico': 'image/x-icon',
+          'woff': 'font/woff',
+          'woff2': 'font/woff2',
+          'ttf': 'font/ttf',
+          'otf': 'font/otf',
+          'eot': 'application/vnd.ms-fontobject',
+        };
+        
+        return contentTypes[extension] || 'application/octet-stream';
+      }
+      
+      function refreshPreview() {
+        if (indexFileHandle) {
+          processIndexFile(indexFileHandle);
+          showToast('Preview refreshed', 'info');
+        }
+      }
+      
+      function resetApp() {
+        // Clear iframe
+        previewFrame.src = 'about:blank';
+        
+        // Switch back to welcome screen
+        previewScreen.style.display = 'none';
+        welcomeScreen.style.display = 'flex';
+      }
+      
+      function showLoading(message) {
+        loadingMessage.textContent = message || 'Loading...';
+        loadingScreen.style.display = 'flex';
+      }
+      
+      function hideLoading() {
+        loadingScreen.style.display = 'none';
+      }
+      
+      function showToast(message, type) {
+        toast.textContent = message;
+        toast.className = `toast ${type || 'info'}`;
+        toast.classList.add('visible');
+        
+        setTimeout(() => {
+          toast.classList.remove('visible');
+        }, 4000);
+      }
+      
+      // Listen for asset requests from iframe
+      window.addEventListener('message', async function(event) {
+        const message = event.data;
+        
+        if (message && message.type === 'assetRequest') {
+          const { id, path } = message;
+          const { content, contentType } = await getAssetContent(path);
+          
+          // Send response back to iframe
+          previewFrame.contentWindow.postMessage({
+            type: 'assetResponse',
+            id: id,
+            content: content,
+            contentType: contentType
+          }, '*');
+        }
+      });
+    });
+  </script>
+</body>
 </html>
