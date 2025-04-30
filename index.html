@@ -195,6 +195,103 @@
 			.toast.visible {
 				opacity: 1;
 			}
+
+			/* Controls for file browser */
+			.file-browser {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 250px;
+				height: 100%;
+				background: white;
+				z-index: 900;
+				box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+				padding: 16px;
+				overflow-y: auto;
+				transform: translateX(-100%);
+				transition: transform 0.3s ease-in-out;
+			}
+
+			.file-browser.visible {
+				transform: translateX(0);
+			}
+
+			.file-browser-toggle {
+				position: fixed;
+				bottom: 16px;
+				left: 16px;
+				z-index: 901;
+				opacity: 0.7;
+				transition: opacity 0.2s;
+			}
+
+			.file-browser-toggle:hover {
+				opacity: 1;
+			}
+
+			.file-browser-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 16px;
+				border-bottom: 1px solid #e5e7eb;
+				padding-bottom: 8px;
+			}
+
+			.file-browser-title {
+				font-weight: 600;
+				font-size: 16px;
+			}
+
+			.file-tree {
+				list-style: none;
+			}
+
+			.file-tree li {
+				margin-bottom: 4px;
+			}
+
+			.file-tree ul {
+				list-style: none;
+				margin-left: 16px;
+			}
+
+			.tree-item {
+				display: flex;
+				align-items: center;
+				padding: 4px 8px;
+				border-radius: 4px;
+				cursor: pointer;
+			}
+
+			.tree-item:hover {
+				background-color: #f5f7ff;
+			}
+
+			.tree-item.active {
+				background-color: #e0e7ff;
+				color: #4f46e5;
+			}
+
+			.tree-item-icon {
+				margin-right: 8px;
+				font-size: 14px;
+			}
+
+			.tree-item-name {
+				font-size: 14px;
+				word-break: break-all;
+			}
+
+			.folder-contents {
+				height: 0;
+				overflow: hidden;
+				transition: height 0.2s ease;
+			}
+
+			.folder-open > .folder-contents {
+				height: auto;
+			}
 		</style>
 	</head>
 	<body>
@@ -233,6 +330,29 @@
 				<div class="toolbar">
 					<div id="backBtn" class="tool-btn" title="Back to welcome screen">↩</div>
 					<div id="refreshBtn" class="tool-btn" title="Refresh preview">⟳</div>
+					<div id="exportBtn" class="tool-btn" title="Export bundle">⬇</div>
+				</div>
+
+				<div
+					id="fileBrowserToggle"
+					class="tool-btn file-browser-toggle"
+					title="Toggle file browser"
+				>
+					📁
+				</div>
+
+				<div id="fileBrowser" class="file-browser">
+					<div class="file-browser-header">
+						<div class="file-browser-title">Files</div>
+						<div
+							id="closeFileBrowser"
+							class="tool-btn"
+							style="width: 24px; height: 24px; font-size: 14px"
+						>
+							×
+						</div>
+					</div>
+					<ul id="fileTree" class="file-tree"></ul>
 				</div>
 			</div>
 
@@ -244,6 +364,743 @@
 			<div id="toast" class="toast"></div>
 		</div>
 
-		<script src="dropserve.js"></script>
+		<script>
+			document.addEventListener('DOMContentLoaded', function () {
+				// DOM Elements
+				const welcomeScreen = document.getElementById('welcome');
+				const previewScreen = document.getElementById('preview');
+				const loadingScreen = document.getElementById('loading');
+				const dropArea = document.getElementById('dropArea');
+				const selectBtn = document.getElementById('selectBtn');
+				const backBtn = document.getElementById('backBtn');
+				const refreshBtn = document.getElementById('refreshBtn');
+				const exportBtn = document.getElementById('exportBtn');
+				const previewFrame = document.getElementById('previewFrame');
+				const loadingMessage = document.getElementById('loadingMessage');
+				const toast = document.getElementById('toast');
+				const fileBrowser = document.getElementById('fileBrowser');
+				const fileBrowserToggle = document.getElementById('fileBrowserToggle');
+				const closeFileBrowser = document.getElementById('closeFileBrowser');
+				const fileTree = document.getElementById('fileTree');
+
+				// State variables
+				let rootDirHandle = null;
+				let indexFileHandle = null;
+				let fileHandles = {};
+				let preProcessedHtml = null;
+
+				// Event Listeners
+				selectBtn.addEventListener('click', selectFolder);
+				backBtn.addEventListener('click', resetApp);
+				refreshBtn.addEventListener('click', refreshPreview);
+				exportBtn.addEventListener('click', exportBundle);
+				fileBrowserToggle.addEventListener('click', toggleFileBrowser);
+				closeFileBrowser.addEventListener('click', () => {
+					fileBrowser.classList.remove('visible');
+				});
+
+				// Drag and drop handlers
+				dropArea.addEventListener('dragover', (e) => {
+					e.preventDefault();
+					dropArea.classList.add('active');
+				});
+
+				dropArea.addEventListener('dragleave', (e) => {
+					e.preventDefault();
+					dropArea.classList.remove('active');
+				});
+
+				dropArea.addEventListener('drop', handleDrop);
+
+				// Check if File System Access API is supported
+				if (!('showDirectoryPicker' in window)) {
+					showToast(
+						"Your browser doesn't support the File System Access API. Please use Chrome, Edge, or another Chromium-based browser.",
+						'error'
+					);
+				}
+
+				// Functions
+				async function selectFolder() {
+					try {
+						const dirHandle = await window.showDirectoryPicker();
+						await processFolder(dirHandle);
+					} catch (error) {
+						if (error.name !== 'AbortError') {
+							showToast(`Error selecting folder: ${error.message}`, 'error');
+							console.error(error);
+						}
+					}
+				}
+
+				async function handleDrop(e) {
+					e.preventDefault();
+					dropArea.classList.remove('active');
+
+					const items = e.dataTransfer.items;
+					if (!items || items.length === 0) {
+						showToast('No items were dropped', 'error');
+						return;
+					}
+
+					const item = items[0];
+
+					if (item.kind === 'file' && typeof item.webkitGetAsEntry === 'function') {
+						const entry = item.webkitGetAsEntry();
+
+						if (entry && entry.isDirectory) {
+							try {
+								// When dropping, we need to ask the user again for permission
+								const dirHandle = await window.showDirectoryPicker();
+								await processFolder(dirHandle);
+							} catch (error) {
+								showToast(`Error processing dropped folder: ${error.message}`, 'error');
+								console.error(error);
+							}
+						} else {
+							showToast('Please drop a folder, not a file', 'error');
+						}
+					} else {
+						showToast('Unsupported drop item', 'error');
+					}
+				}
+
+				async function processFolder(dirHandle) {
+					showLoading('Analyzing folder...');
+					rootDirHandle = dirHandle;
+					fileHandles = {};
+
+					try {
+						// Build file tree first
+						await buildFileTree(dirHandle, '', fileTree);
+
+						// Find index.html
+						let indexFile = await findIndexFile(dirHandle);
+
+						if (indexFile) {
+							indexFileHandle = indexFile;
+
+							// Read and process all files
+							await processAllFiles(dirHandle);
+
+							// Process index.html specially
+							await processIndexFile(indexFile);
+
+							// Switch to preview
+							welcomeScreen.style.display = 'none';
+							previewScreen.style.display = 'block';
+
+							showToast(`Site "${dirHandle.name}" loaded successfully!`, 'success');
+						} else {
+							throw new Error(`No index.html found in "${dirHandle.name}" folder`);
+						}
+					} catch (error) {
+						showToast(error.message, 'error');
+						console.error(error);
+					} finally {
+						hideLoading();
+					}
+				}
+
+				async function buildFileTree(dirHandle, path, parentElement) {
+					try {
+						for await (const entry of dirHandle.values()) {
+							const itemPath = path ? `${path}/${entry.name}` : entry.name;
+							const li = document.createElement('li');
+
+							if (entry.kind === 'directory') {
+								// Create folder item
+								const folderItem = document.createElement('div');
+								folderItem.className = 'tree-item';
+								folderItem.innerHTML = `
+                <span class="tree-item-icon">📁</span>
+                <span class="tree-item-name">${entry.name}</span>
+              `;
+
+								// Create folder contents container
+								const folderContents = document.createElement('ul');
+								folderContents.className = 'folder-contents';
+
+								// Add click handler to toggle folder
+								folderItem.addEventListener('click', (e) => {
+									e.stopPropagation();
+									li.classList.toggle('folder-open');
+									folderItem.querySelector('.tree-item-icon').textContent = li.classList.contains(
+										'folder-open'
+									)
+										? '📂'
+										: '📁';
+								});
+
+								li.appendChild(folderItem);
+								li.appendChild(folderContents);
+
+								// Recursively build tree for this directory
+								await buildFileTree(entry, itemPath, folderContents);
+							} else {
+								// Create file item
+								const fileItem = document.createElement('div');
+								fileItem.className = 'tree-item';
+								fileItem.innerHTML = `
+                <span class="tree-item-icon">📄</span>
+                <span class="tree-item-name">${entry.name}</span>
+              `;
+
+								// Store file handle for later
+								fileHandles[itemPath] = entry;
+
+								// Add click handler to view file
+								fileItem.addEventListener('click', () => {
+									viewFile(itemPath);
+								});
+
+								li.appendChild(fileItem);
+							}
+
+							parentElement.appendChild(li);
+						}
+					} catch (error) {
+						console.error('Error building file tree:', error);
+					}
+				}
+
+				async function viewFile(path) {
+					try {
+						showLoading(`Loading ${path}...`);
+
+						const fileHandle = fileHandles[path];
+						if (!fileHandle) {
+							throw new Error(`File not found: ${path}`);
+						}
+
+						const file = await fileHandle.getFile();
+						const content = await file.text();
+
+						// If it's the index file, reload the preview
+						if (path === 'index.html' || path.endsWith('/index.html')) {
+							await processIndexFile(fileHandle);
+						} else {
+							// For other files, show them in a new window/tab
+							const blob = new Blob([content], { type: getContentType(path) });
+							const url = URL.createObjectURL(blob);
+							window.open(url, '_blank');
+						}
+					} catch (error) {
+						showToast(`Error viewing file: ${error.message}`, 'error');
+						console.error(error);
+					} finally {
+						hideLoading();
+					}
+				}
+
+				async function findIndexFile(dirHandle) {
+					const indexFiles = ['index.html', 'index.htm', 'default.html', 'default.htm'];
+
+					for (const fileName of indexFiles) {
+						try {
+							const fileHandle = await dirHandle.getFileHandle(fileName);
+							return fileHandle;
+						} catch (error) {
+							// File not found, continue to next
+						}
+					}
+
+					return null;
+				}
+
+				async function processAllFiles(dirHandle, path = '') {
+					// Process all files in the directory recursively
+					for await (const entry of dirHandle.values()) {
+						const entryPath = path ? `${path}/${entry.name}` : entry.name;
+
+						if (entry.kind === 'directory') {
+							// Recursively process subdirectories
+							await processAllFiles(entry, entryPath);
+						} else {
+							// Store file handle
+							fileHandles[entryPath] = entry;
+						}
+					}
+				}
+
+				async function processIndexFile(fileHandle) {
+					showLoading('Processing index.html...');
+
+					try {
+						const file = await fileHandle.getFile();
+						const content = await file.text();
+
+						// Process HTML to replace resource references
+						const processedHtml = await processHtml(content);
+						preProcessedHtml = processedHtml;
+
+						// Create blob URL
+						const blob = new Blob([processedHtml], { type: 'text/html' });
+						const url = URL.createObjectURL(blob);
+
+						// Load in iframe
+						previewFrame.src = url;
+					} catch (error) {
+						throw new Error(`Error processing index file: ${error.message}`);
+					}
+				}
+
+				async function processHtml(html) {
+					// Create a DOM parser
+					const parser = new DOMParser();
+					const doc = parser.parseFromString(html, 'text/html');
+
+					// Process all script tags
+					const scripts = doc.querySelectorAll('script[src]');
+					for (const script of scripts) {
+						await processResourceAttribute(script, 'src');
+					}
+
+					// Process all link tags
+					const links = doc.querySelectorAll('link[href]');
+					for (const link of links) {
+						await processResourceAttribute(link, 'href');
+					}
+
+					// Process all img tags
+					const images = doc.querySelectorAll('img[src]');
+					for (const img of images) {
+						await processResourceAttribute(img, 'src');
+					}
+
+					// Add a base tag to help with any remaining relative paths
+					const baseElement = document.createElement('base');
+					baseElement.href = '/';
+					if (doc.head.firstChild) {
+						doc.head.insertBefore(baseElement, doc.head.firstChild);
+					} else {
+						doc.head.appendChild(baseElement);
+					}
+
+					// Add virtual server script
+					const serverScript = document.createElement('script');
+					serverScript.textContent = `
+          // Virtual server script for handling dynamic resource loading
+          (function() {
+            // Handle fetch requests for assets
+            const originalFetch = window.fetch;
+            window.fetch = function(url, options) {
+              // Only intercept same-origin URLs
+              if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('data:') && !url.startsWith('blob:')) {
+                // Check if this is a resource we couldn't pre-process
+                if (url.startsWith('/')) {
+                  // Request from parent window
+                  return new Promise((resolve, reject) => {
+                    // Generate a unique message ID
+                    const messageId = Date.now() + Math.random().toString(36).substr(2, 9);
+                    
+                    // Create a message listener for the response
+                    window.addEventListener('message', function responseHandler(event) {
+                      const message = event.data;
+                      if (message && message.type === 'assetResponse' && message.id === messageId) {
+                        // Remove the listener
+                        window.removeEventListener('message', responseHandler);
+                        
+                        if (message.error) {
+                          reject(new Error(message.error));
+                        } else {
+                          // Create a response object from the data
+                          const blob = new Blob([message.content], { type: message.contentType });
+                          resolve(new Response(blob, {
+                            status: 200,
+                            headers: { 'Content-Type': message.contentType }
+                          }));
+                        }
+                      }
+                    });
+                    
+                    // Send request to parent window
+                    window.parent.postMessage({
+                      type: 'assetRequest',
+                      id: messageId,
+                      path: url
+                    }, '*');
+                  });
+                }
+              }
+              
+              // Otherwise use original fetch
+              return originalFetch(url, options);
+            };
+            
+            // Override XMLHttpRequest for dynamic assets
+            const XHROpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url, ...args) {
+              if (typeof url === 'string' && !url.startsWith('http') && !url.startsWith('data:') && !url.startsWith('blob:')) {
+                if (url.startsWith('/')) {
+                  // Instead of opening the URL directly, we'll handle it via message passing
+                  const xhr = this;
+                  const messageId = Date.now() + Math.random().toString(36).substr(2, 9);
+                  
+                  // Create a handler for the response
+                  window.addEventListener('message', function responseHandler(event) {
+                    const message = event.data;
+                    if (message && message.type === 'assetResponse' && message.id === messageId) {
+                      // Remove the listener
+                      window.removeEventListener('message', responseHandler);
+                      
+                      if (message.error) {
+                        xhr.status = 404;
+                        xhr.statusText = 'Not Found';
+                        xhr.response = xhr.responseText = message.error;
+                        if (xhr.onerror) xhr.onerror();
+                      } else {
+                        // Create blob URL for the content
+                        const blob = new Blob([message.content], { type: message.contentType });
+                        const blobUrl = URL.createObjectURL(blob);
+                        
+                        // Use original XHR to fetch the blob URL
+                        XHROpen.call(xhr, method, blobUrl, ...args);
+                        xhr.send();
+                      }
+                    }
+                  });
+                  
+                  // Send request to parent window
+                  window.parent.postMessage({
+                    type: 'assetRequest',
+                    id: messageId,
+                    path: url
+                  }, '*');
+                  
+                  // Set up a dummy request that we won't actually send
+                  return XHROpen.call(this, 'GET', 'about:blank', ...args);
+                }
+              }
+              
+              // For all other URLs, use the original open method
+              return XHROpen.call(this, method, url, ...args);
+            };
+          })();
+        `;
+
+					if (doc.body.firstChild) {
+						doc.body.insertBefore(serverScript, doc.body.firstChild);
+					} else {
+						doc.body.appendChild(serverScript);
+					}
+
+					return doc.documentElement.outerHTML;
+				}
+
+				async function processResourceAttribute(element, attrName) {
+					const attrValue = element.getAttribute(attrName);
+
+					if (
+						!attrValue ||
+						attrValue.startsWith('data:') ||
+						attrValue.startsWith('blob:') ||
+						attrValue.startsWith('http://') ||
+						attrValue.startsWith('https://')
+					) {
+						return; // Skip external resources or data URLs
+					}
+
+					try {
+						// Resolve the path relative to the site root
+						const resolvedPath = resolvePath(attrValue);
+						const fileHandle = await getFileHandleFromPath(resolvedPath);
+
+						if (fileHandle) {
+							// Read file content
+							const file = await fileHandle.getFile();
+							const contentType = getContentType(resolvedPath);
+
+							// For CSS and JS, we can preprocess
+							if (contentType === 'text/css' || contentType === 'application/javascript') {
+								const content = await file.text();
+
+								// Create a blob URL
+								const blob = new Blob([content], { type: contentType });
+								const url = URL.createObjectURL(blob);
+
+								// Update the attribute
+								element.setAttribute(attrName, url);
+							}
+							// For images we can directly create blob URLs
+							else if (contentType.startsWith('image/')) {
+								const arrayBuffer = await file.arrayBuffer();
+								const blob = new Blob([arrayBuffer], { type: contentType });
+								const url = URL.createObjectURL(blob);
+
+								// Update the attribute
+								element.setAttribute(attrName, url);
+							}
+							// For other files, we'll handle them dynamically via the server script
+						}
+					} catch (error) {
+						console.warn(`Could not preprocess resource: ${attrValue}`, error);
+						// We'll let the server script handle this resource
+					}
+				}
+
+				function resolvePath(path) {
+					// Handle absolute paths (starting with /)
+					if (path.startsWith('/')) {
+						return path.substring(1); // Remove the leading slash
+					}
+
+					// TODO: For relative paths, we would need to know the current URL context
+					// For now, treat all paths as relative to the root
+					return path;
+				}
+
+				async function getFileHandleFromPath(path) {
+					// Check if we already have this file handle
+					if (fileHandles[path]) {
+						return fileHandles[path];
+					}
+
+					// Otherwise, try to navigate to it
+					const parts = path.split('/').filter((part) => part.length > 0);
+					if (parts.length === 0) {
+						return null;
+					}
+
+					let currentHandle = rootDirHandle;
+
+					// Navigate through directories
+					for (let i = 0; i < parts.length - 1; i++) {
+						const part = parts[i];
+
+						try {
+							currentHandle = await currentHandle.getDirectoryHandle(part);
+						} catch (error) {
+							console.warn(`Directory not found: ${part} in path ${path}`);
+							return null;
+						}
+					}
+
+					// Get the file
+					try {
+						const fileName = parts[parts.length - 1];
+						const fileHandle = await currentHandle.getFileHandle(fileName);
+
+						// Cache the file handle
+						fileHandles[path] = fileHandle;
+
+						return fileHandle;
+					} catch (error) {
+						console.warn(`File not found: ${path}`);
+						return null;
+					}
+				}
+
+				function getContentType(path) {
+					const extension = path.split('.').pop().toLowerCase();
+
+					const contentTypes = {
+						html: 'text/html',
+						htm: 'text/html',
+						css: 'text/css',
+						js: 'application/javascript',
+						mjs: 'application/javascript',
+						json: 'application/json',
+						svg: 'image/svg+xml',
+						png: 'image/png',
+						jpg: 'image/jpeg',
+						jpeg: 'image/jpeg',
+						gif: 'image/gif',
+						webp: 'image/webp',
+						ico: 'image/x-icon',
+						woff: 'font/woff',
+						woff2: 'font/woff2',
+						ttf: 'font/ttf',
+						otf: 'font/otf',
+						eot: 'application/vnd.ms-fontobject',
+						mp4: 'video/mp4',
+						webm: 'video/webm',
+						mp3: 'audio/mpeg',
+						wav: 'audio/wav',
+						pdf: 'application/pdf',
+						zip: 'application/zip',
+						txt: 'text/plain',
+						xml: 'application/xml'
+					};
+
+					return contentTypes[extension] || 'application/octet-stream';
+				}
+
+				function toggleFileBrowser() {
+					fileBrowser.classList.toggle('visible');
+				}
+
+				function refreshPreview() {
+					if (indexFileHandle) {
+						processIndexFile(indexFileHandle);
+						showToast('Preview refreshed', 'info');
+					}
+				}
+
+				async function exportBundle() {
+					showLoading('Preparing export...');
+
+					try {
+						// Create a new directory handle for saving
+						const saveHandle = await window.showDirectoryPicker({
+							id: 'save-bundle',
+							mode: 'readwrite',
+							startIn: 'downloads'
+						});
+
+						// Copy all files to the new location
+						await copyDirectory(rootDirHandle, saveHandle);
+
+						showToast('Bundle exported successfully!', 'success');
+					} catch (error) {
+						if (error.name !== 'AbortError') {
+							showToast(`Export failed: ${error.message}`, 'error');
+							console.error(error);
+						}
+					} finally {
+						hideLoading();
+					}
+				}
+
+				async function copyDirectory(sourceDir, targetDir, path = '') {
+					for await (const entry of sourceDir.values()) {
+						const entryPath = path ? `${path}/${entry.name}` : entry.name;
+
+						if (entry.kind === 'directory') {
+							// Create the directory in the target
+							const newDir = await targetDir.getDirectoryHandle(entry.name, { create: true });
+
+							// Recursively copy contents
+							await copyDirectory(entry, newDir, entryPath);
+						} else {
+							// Copy the file
+							const fileHandle = await targetDir.getFileHandle(entry.name, { create: true });
+							const writable = await fileHandle.createWritable();
+
+							// Get file content
+							const file = await entry.getFile();
+
+							try {
+								// Write the file
+								await writable.write(file);
+							} finally {
+								await writable.close();
+							}
+						}
+					}
+				}
+
+				function resetApp() {
+					// Clear iframe
+					previewFrame.src = 'about:blank';
+
+					// Clear file tree
+					fileTree.innerHTML = '';
+
+					// Reset state
+					rootDirHandle = null;
+					indexFileHandle = null;
+					fileHandles = {};
+					preProcessedHtml = null;
+
+					// Hide file browser
+					fileBrowser.classList.remove('visible');
+
+					// Switch back to welcome screen
+					previewScreen.style.display = 'none';
+					welcomeScreen.style.display = 'flex';
+				}
+
+				function showLoading(message) {
+					loadingMessage.textContent = message || 'Loading...';
+					loadingScreen.style.display = 'flex';
+				}
+
+				function hideLoading() {
+					loadingScreen.style.display = 'none';
+				}
+
+				function showToast(message, type) {
+					toast.textContent = message;
+					toast.className = `toast ${type || 'info'}`;
+					toast.classList.add('visible');
+
+					setTimeout(() => {
+						toast.classList.remove('visible');
+					}, 4000);
+				}
+
+				// Listen for asset requests from iframe
+				window.addEventListener('message', async function (event) {
+					const message = event.data;
+
+					if (message && message.type === 'assetRequest') {
+						const { id, path } = message;
+
+						try {
+							// Resolve the path (remove leading slash if present)
+							const normalizedPath = path.startsWith('/') ? path.substring(1) : path;
+
+							// Get the file handle
+							const fileHandle = await getFileHandleFromPath(normalizedPath);
+
+							if (!fileHandle) {
+								// Send error response
+								previewFrame.contentWindow.postMessage(
+									{
+										type: 'assetResponse',
+										id: id,
+										error: `File not found: ${path}`
+									},
+									'*'
+								);
+								return;
+							}
+
+							// Read file content
+							const file = await fileHandle.getFile();
+							const contentType = getContentType(normalizedPath);
+
+							let content;
+							if (
+								contentType.startsWith('text/') ||
+								contentType === 'application/javascript' ||
+								contentType === 'application/json'
+							) {
+								// For text files, read as text
+								content = await file.text();
+							} else {
+								// For binary files, read as ArrayBuffer
+								const arrayBuffer = await file.arrayBuffer();
+								content = new Uint8Array(arrayBuffer);
+							}
+
+							// Send response
+							previewFrame.contentWindow.postMessage(
+								{
+									type: 'assetResponse',
+									id: id,
+									content: content,
+									contentType: contentType
+								},
+								'*'
+							);
+						} catch (error) {
+							console.error(`Error handling asset request: ${path}`, error);
+
+							// Send error response
+							previewFrame.contentWindow.postMessage(
+								{
+									type: 'assetResponse',
+									id: id,
+									error: `Error loading asset: ${error.message}`
+								},
+								'*'
+							);
+						}
+					}
+				});
+			});
+		</script>
 	</body>
 </html>
